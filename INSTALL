@@ -1,0 +1,10 @@
+Xmms-musepack plugin
+Required:
+	Iconv headers and libs
+	Taglib headers and libs >= 1.4
+	GTK-1.2 headers and libs
+	Xmms-1.2.10 headers and binaries
+        libmpcdec >= 1.2
+To install:
+run "./configure && make" as user
+run "make install" as root
