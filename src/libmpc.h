@@ -80,6 +80,7 @@ typedef struct PluginConfig
     gboolean replaygain;
     gboolean albumGain;
     gboolean isEq;
+    gboolean fastSeek;
     iconv_t  iFromUTF8;
     iconv_t  iToUTF8;
 };
@@ -89,6 +90,7 @@ typedef struct Widgets
     GtkWidget* aboutBox;
     GtkWidget* configBox;
     GtkWidget* bitrateCheck;
+    GtkWidget* seekCheck;
     GtkWidget* clippingCheck;
     GtkWidget* replaygainCheck;
     GtkWidget* albumCheck;

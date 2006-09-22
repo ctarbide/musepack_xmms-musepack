@@ -101,6 +101,7 @@ static void mpcOpenPlugin()
     xmms_cfg_read_boolean(cfg, "musepack", "albumGain",      &pluginConfig.albumGain);
     xmms_cfg_read_boolean(cfg, "musepack", "dynamicBitrate", &pluginConfig.dynamicBitrate);
     xmms_cfg_read_boolean(cfg, "musepack", "replaygain",     &pluginConfig.replaygain);
+    xmms_cfg_read_boolean(cfg, "musepack", "fastSeek",       &pluginConfig.fastSeek);
     xmms_cfg_free(cfg);
 }
 
@@ -151,6 +152,11 @@ static void mpcConfigBox()
         widgets.bitrateCheck = bitrateCheck;
         gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(bitrateCheck), pluginConfig.dynamicBitrate);
         gtk_box_pack_start(GTK_BOX(gSvbox), bitrateCheck, FALSE, FALSE, 0);
+
+        GtkWidget* seekCheck = gtk_check_button_new_with_label("Enable Fast Seeking");
+        widgets.seekCheck = seekCheck;
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(seekCheck), pluginConfig.fastSeek);
+        gtk_box_pack_start(GTK_BOX(gSvbox), seekCheck, FALSE, FALSE, 0);
         gtk_notebook_append_page(GTK_NOTEBOOK(notebook), generalSet, gtk_label_new("Plugin"));
 
         //ReplayGain Settings Tab
@@ -227,6 +233,8 @@ static void saveConfigBox(GtkWidget* p_Widget, gpointer p_Data)
     pluginConfig.clipPrevention = gtk_toggle_button_get_active(tb);
     tb = GTK_TOGGLE_BUTTON(widgets.bitrateCheck);
     pluginConfig.dynamicBitrate = gtk_toggle_button_get_active(tb);
+    tb = GTK_TOGGLE_BUTTON(widgets.seekCheck);
+    pluginConfig.fastSeek = gtk_toggle_button_get_active(tb);
     tb = GTK_TOGGLE_BUTTON(widgets.albumCheck);
     pluginConfig.albumGain = gtk_toggle_button_get_active(tb);
 
@@ -236,6 +244,7 @@ static void saveConfigBox(GtkWidget* p_Widget, gpointer p_Data)
     xmms_cfg_write_boolean (cfg, "musepack", "albumGain",      pluginConfig.albumGain);
     xmms_cfg_write_boolean (cfg, "musepack", "dynamicBitrate", pluginConfig.dynamicBitrate);
     xmms_cfg_write_boolean (cfg, "musepack", "replaygain",     pluginConfig.replaygain);
+    xmms_cfg_write_boolean (cfg, "musepack", "fastSeek",       pluginConfig.fastSeek);
     xmms_cfg_write_default_file (cfg);
 
     xmms_cfg_free (cfg);
@@ -557,7 +566,7 @@ static void mpcFileInfoBox(char* p_Filename)
             gtk_entry_set_text(GTK_ENTRY(fileEntry), entry);
             free(entry);
             freeTags(tags);
-	    fclose(input);
+            fclose(input);
         }
         else
         {
@@ -779,6 +788,7 @@ static void* decodeStream(void* data)
         return endThread(input, true);
     }
 
+    mpc_decoder_set_seeking(&decoder, &info, pluginConfig.fastSeek);
     setReplaygain(info, decoder);
 
     MPC_SAMPLE_FORMAT sampleBuffer[MPC_DECODER_BUFFER_LENGTH];
