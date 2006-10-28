@@ -325,21 +325,16 @@ static void mpcClosePlugin()
 
 static void mpcGetSongInfo(char* p_Filename, char** p_Title, int* p_Length)
 {
-    FILE* input = fopen(p_Filename, "rb");
-    if(input)
-    {
+	mpc_reader reader;
+	if (mpc_reader_init_stdio(&reader, p_Filename) == MPC_STATUS_OK) {
         MpcInfo tags = getTags(p_Filename);
         *p_Title = mpcGenerateTitle(tags, p_Filename);
         freeTags(tags);
         mpc_streaminfo info;
-        mpc_reader_file reader;
-        mpc_reader_setup_file_reader(&reader, input);
-        mpc_streaminfo_read(&info, &reader.reader);
+		mpc_streaminfo_init(&info, &reader);
         *p_Length = static_cast<int> (1000 * mpc_streaminfo_get_length(&info));
-        fclose(input);
-    }
-    else
-    {
+		mpc_reader_exit_stdio(&reader);
+    } else {
         char* temp = g_strdup_printf("[xmms-musepack] mpcGetSongInfo is unable to open %s\n", p_Filename);
         perror(temp);
         free(temp);
@@ -525,13 +520,10 @@ static void mpcFileInfoBox(char* p_Filename)
         GtkWidget* albumPeakLabel = mpcGtkLabel(infoVbox);
         GtkWidget* albumGainLabel = mpcGtkLabel(infoVbox);
 
-        FILE* input = fopen(p_Filename, "rb");
-        if(input)
-        {
+		mpc_reader reader;
+		if (mpc_reader_init_stdio(&reader, p_Filename) == MPC_STATUS_OK) {
             mpc_streaminfo info;
-            mpc_reader_file reader;
-            mpc_reader_setup_file_reader(&reader, input);
-            mpc_streaminfo_read(&info, &reader.reader);
+			mpc_streaminfo_init(&info, &reader);
 
             int time = static_cast<int> (mpc_streaminfo_get_length(&info));
             int minutes = time / 60;
@@ -566,7 +558,7 @@ static void mpcFileInfoBox(char* p_Filename)
             gtk_entry_set_text(GTK_ENTRY(fileEntry), entry);
             free(entry);
             freeTags(tags);
-            fclose(input);
+			mpc_reader_exit_stdio(&reader);
         }
         else
         {
@@ -753,21 +745,17 @@ static void* decodeStream(void* data)
 {
     lockAcquire();
     const char* filename = static_cast<const char*> (data);
-    FILE* input = fopen(filename, "rb");
-    if (!input)
-    {
+	mpc_reader reader;
+	if (mpc_reader_init_stdio(&reader, filename) != MPC_STATUS_OK) {
         mpcDecoder.isError = g_strdup_printf("[xmms-musepack] decodeStream is unable to open %s", filename);
-        return endThread(input, true);
+        return endThread(0, true);
     }
 
-    mpc_reader_file reader;
-    mpc_reader_setup_file_reader(&reader, input);
-
     mpc_streaminfo info;
-    if (mpc_streaminfo_read(&info, &reader.reader) != ERROR_CODE_OK)
-    {
+	if (mpc_streaminfo_init(&info, &reader) != MPC_STATUS_OK) {
         mpcDecoder.isError = g_strdup_printf("[xmms-musepack] decodeStream is unable to read %s", filename);
-        return endThread(input, true);
+		mpc_reader_exit_stdio(&reader);
+        return endThread(0, true);
     }
 
     MpcInfo tags     = getTags(filename);
@@ -780,24 +768,24 @@ static void* decodeStream(void* data)
 
     MpcPlugin.set_info(track.display, track.length, track.bitrate, track.sampleFreq, track.channels);
 
-    mpc_decoder decoder;
-    mpc_decoder_setup(&decoder, &reader.reader);
-    if (!mpc_decoder_initialize(&decoder, &info))
-    {
+    mpc_decoder * decoder;
+	if (mpc_decoder_init(&decoder, &reader, &info) != MPC_STATUS_OK) {
         mpcDecoder.isError = g_strdup_printf("[xmms-musepack] decodeStream is unable to initialize decoder on %s", filename);
-        return endThread(input, true);
+		mpc_reader_exit_stdio(&reader);
+        return endThread(0, true);
     }
 
-    mpc_decoder_set_seeking(&decoder, &info, pluginConfig.fastSeek);
-    setReplaygain(info, decoder);
+	mpc_decoder_set_seeking(decoder, &info, pluginConfig.fastSeek);
+    setReplaygain(info, *decoder);
 
     MPC_SAMPLE_FORMAT sampleBuffer[MPC_DECODER_BUFFER_LENGTH];
     char xmmsBuffer[MPC_DECODER_BUFFER_LENGTH * 4];
 
     if (!MpcPlugin.output->open_audio(FMT_S16_LE, track.sampleFreq, track.channels))
     {
-        mpcDecoder.isError = g_strdup_printf("[xmms-musepack] decodeStream is unable to open an audio output");
-        return endThread(input, true);
+		mpcDecoder.isError = g_strdup_printf("[xmms-musepack] decodeStream is unable to open an audio output");
+		mpc_reader_exit_stdio(&reader);
+        return endThread(0, true);
     }
     else
     {
@@ -811,7 +799,7 @@ static void* decodeStream(void* data)
     {
         if (getOffset() != -1)
         {
-            mpc_decoder_seek_seconds(&decoder, mpcDecoder.offset);
+            mpc_decoder_seek_seconds(decoder, mpcDecoder.offset);
             setOffset(-1);
         }
 
@@ -820,16 +808,18 @@ static void* decodeStream(void* data)
         int iFree = MpcPlugin.output->buffer_free();
         if (!mpcDecoder.isPause &&  iFree >= ((1152 * 4) << iPlaying))
         {
-            unsigned status = processBuffer(sampleBuffer, xmmsBuffer, decoder);
+            unsigned status = processBuffer(sampleBuffer, xmmsBuffer, *decoder);
             if (status == (unsigned) (-1))
             {
-                mpcDecoder.isError = g_strdup_printf("[xmms-musepack] error from internal decoder on %s", filename);
-                return endThread(input, true);
+				mpcDecoder.isError = g_strdup_printf("[xmms-musepack] error from internal decoder on %s", filename);
+				mpc_reader_exit_stdio(&reader);
+                return endThread(0, true);
             }
 	    else if (status == 0)
             {
                 //mpcDecoder.isError = g_strdup_printf("[xmms-musepack] null output from internal decoder on %s", filename);
-                return endThread(input, true);
+				mpc_reader_exit_stdio(&reader);
+                return endThread(0, true);
             }
             lockRelease();
 
@@ -848,8 +838,9 @@ static void* decodeStream(void* data)
             lockRelease();
             xmms_usleep(10000);
         }
-    }
-    return endThread(input, false);
+	}
+	mpc_reader_exit_stdio(&reader);
+    return endThread(0, false);
 }
 
 static int processBuffer(MPC_SAMPLE_FORMAT* sampleBuffer, char* xmmsBuffer, mpc_decoder& decoder)
