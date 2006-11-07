@@ -55,8 +55,6 @@ extern "C"
 //iconv headers
 #include <iconv.h>
 
-#undef FALSE
-#undef TRUE
 //libmpcdec headers
 #include <mpcdec/mpcdec.h>
 
@@ -110,7 +108,7 @@ typedef struct Widgets
 typedef struct MpcDecoder
 {
     char*      isError;
-    double     offset;
+    double     offset;    
     bool       isOutput;
     bool       isAlive;
     bool       isPause;
