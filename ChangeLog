@@ -1,3 +1,6 @@
+1.2.1
+	Enable bit-perfect fast seeking. Patch by Nicolas Botti (r2d)
+
 1.2
 	General code refactoring
 	Taglib dependency for ape/id3v1 tags
